@@ -77,6 +77,6 @@ jobs:
           labels: ${{ steps.meta-web.outputs.labels }}
           # Pass VITE_ARENA_WS_URL from repo secret at build time
           build-args: |
-            VITE_ARENA_WS_URL=${{ secrets.VITE_ARENA_WS_URL }}
+            VITE_ARENA_WS_URL=${{ secrets.VITE_ARENA_WS_URL || 'ws://localhost/arena' }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
