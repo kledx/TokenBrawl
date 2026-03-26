@@ -41,6 +41,7 @@ services:
       - ARENA_LLM_BASE_URL=${ARENA_LLM_BASE_URL:-}
       - ARENA_LLM_API_KEY=${ARENA_LLM_API_KEY:-}
       - ARENA_LLM_MODEL=${ARENA_LLM_MODEL:-gpt-4o-mini}
+      - ARENA_LLM_LANG=${ARENA_LLM_LANG:-en}
     depends_on:
       - arena
     networks:

@@ -51,12 +51,18 @@ loadEnvFile();
 const LLM_BASE_URL = (process.env.ARENA_LLM_BASE_URL || 'https://api.openai.com').replace(/\/$/, '');
 const LLM_API_KEY = process.env.ARENA_LLM_API_KEY || '';
 const LLM_MODEL = process.env.ARENA_LLM_MODEL || 'gpt-4o-mini';
+const LLM_LANG = (process.env.ARENA_LLM_LANG || 'en').toLowerCase();
 const LLM_TIMEOUT_MS = 12_000;
 
 const isConfigured = !!LLM_API_KEY;
 
+// Language instruction injected into every system prompt
+const LANG_INSTRUCTION = LLM_LANG === 'zh'
+  ? '\n\n重要：所有输出内容（reasoning、rebuttal 字段）必须使用简体中文。JSON 的键名保持英文，只有值中的文字内容使用中文。'
+  : '';
+
 if (isConfigured) {
-  console.log(`[LLM] Configured: ${LLM_BASE_URL} / model: ${LLM_MODEL}`);
+  console.log(`[LLM] Configured: ${LLM_BASE_URL} / model: ${LLM_MODEL} / lang: ${LLM_LANG}`);
 } else {
   console.warn('[LLM] No API key found — will use fallback rules engine');
 }
@@ -187,7 +193,7 @@ Rules:
 - If high-risk flags exist (freeze auth, mint auth, high risk), these are serious red flags
 - Confidence should reflect how strong the data supports your position
 - Keep reasoning concise and data-driven (2-3 sentences max)
-- You MUST respond with valid JSON only`,
+- You MUST respond with valid JSON only${LANG_INSTRUCTION}`,
     },
     {
       role: 'user',
@@ -236,7 +242,7 @@ Rules:
 - Directly address their reasoning, don't just repeat your position
 - Reference specific data points that counter their argument
 - Be concise (1-2 sentences)
-- You MUST respond with valid JSON only`,
+- You MUST respond with valid JSON only${LANG_INSTRUCTION}`,
     },
     {
       role: 'user',
@@ -290,7 +296,7 @@ Rules:
 - Consider ALL arguments, not just your own bias
 - If an opponent presented strong data-backed evidence, you SHOULD change your vote
 - Confidence should reflect how certain you are after hearing all sides
-- You MUST respond with valid JSON only`,
+- You MUST respond with valid JSON only${LANG_INSTRUCTION}`,
     },
     {
       role: 'user',
