@@ -206,9 +206,15 @@ export function ArenaPage() {
 
     const handleServerMessage = (msg: ServerMessage) => {
       switch (msg.type) {
+        // Initial state snapshot sent on every new connection (before join handshake)
+        case 'viewer_state' as any:
+          setAgents((msg as any).agents ?? []);
+          break;
+
         case 'welcome':
           setAgents(msg.agents);
           break;
+
 
         case 'agent_joined':
           setAgents(prev => [...prev.filter(a => a.agentId !== msg.agent.agentId), msg.agent]);

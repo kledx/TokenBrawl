@@ -594,6 +594,17 @@ export class ArenaServer {
   private handleConnection(ws: WebSocket, _req: IncomingMessage): void {
     let agentId: string | null = null;
 
+    // Send initial state snapshot to new viewer connections immediately on connect.
+    // This ensures browser viewers see current agents and debate state even if they
+    // connected after bots had already joined (avoiding stale NODES_ACTIVE: 0).
+    const agentList = Array.from(this.clients.values()).map(c => c.agent);
+    this.sendTo(ws, {
+      type: 'viewer_state',
+      agents: agentList,
+      totalAgents: this.clients.size,
+      activeDebate: this.currentDebate?.getState() ?? null,
+    } as unknown as ServerMessage);
+
     ws.on('pong', () => {
       if (agentId && this.clients.has(agentId)) {
         this.clients.get(agentId)!.isAlive = true;
