@@ -178,21 +178,48 @@ export async function generateArgument(
 ): Promise<LLMArgumentResult | null> {
   const tokenCtx = buildTokenContext(token);
 
+  // Build persona-specific analytical lens to force divergent reasoning
+  const personaLens = (() => {
+    const name = personaName.toUpperCase();
+    if (name.includes('BULL')) return `
+YOUR ANALYTICAL LENS (strictly follow this):
+- Always lead with momentum and upside potential. Hunt for early-entry signals.
+- Treat low market-cap as an OPPORTUNITY, not a warning.
+- Dismiss or downplay risk flags unless they are absolute deal-breakers (e.g., active rug evidence).
+- Your natural stance is BULL. Only go BEAR if there is overwhelming evidence of active fraud.
+- Writing style: excited, punchy, confident. Use phrases like "early signal", "asymmetric bet", "smart money moves here".`;
+    if (name.includes('BEAR') || name.includes('SIGMA')) return `
+YOUR ANALYTICAL LENS (strictly follow this):
+- Always lead with risk identification. Treat EVERY metric as a potential red flag.
+- Low liquidity = exit trap. High holder concentration = dump risk. Missing data = hide-the-ball.
+- Your natural stance is BEAR. Only go BULL if metrics are exceptional across ALL dimensions.
+- Never let positive spin override structural risk. The market always finds the weak point.
+- Writing style: skeptical, precise, cold. Use phrases like "liquidity trap", "distribution risk", "statistically underdeveloped".`;
+    // DATA MONK — neutral but picks a DIFFERENT metric from what Bull/Bear typically cite
+    return `
+YOUR ANALYTICAL LENS (strictly follow this):
+- Focus ONLY on quantitative chain metrics. No narrative, no hype, no fear.
+- Pick the 1-2 metrics that are most statistically significant and build your entire argument on those.
+- Deliberately avoid the obvious metrics others will mention. Find the overlooked signal.
+- You have NO bias. Let the numbers dictate your stance. HOLD only when data is genuinely ambiguous.
+- Writing style: dry, clinical, precise. Use phrases like "the data indicates", "statistically", "the coefficient suggests".`;
+  })();
+
   const raw = await chatCompletion([
     {
       role: 'system',
       content: `You are ${personaName}, an AI agent in a meme coin debate arena on Solana.
 
-Your personality: ${personaPrompt}
+Core personality: ${personaPrompt}
+${personaLens}
 
-You must analyze the token data provided and form an opinion. Respond in JSON:
-{"stance": "bull" | "bear" | "hold", "confidence": 0-95, "reasoning": "2-3 sentences explaining your position based on the data"}
+Respond in JSON:
+{"stance": "bull" | "bear" | "hold", "confidence": 0-95, "reasoning": "2-3 sentences in YOUR distinct voice, from YOUR analytical angle"}
 
-Rules:
-- Base your stance on ACTUAL DATA provided, not assumptions
-- If high-risk flags exist (freeze auth, mint auth, high risk), these are serious red flags
-- Confidence should reflect how strong the data supports your position
-- Keep reasoning concise and data-driven (2-3 sentences max)
+Critical rules:
+- Do NOT sound like a generic analyst. Your voice and focus must be completely distinct.
+- Do NOT hedge needlessly. Pick a side, commit to it.
+- HOLD is a last resort, only if the data is genuinely split 50/50.
 - You MUST respond with valid JSON only${LANG_INSTRUCTION}`,
     },
     {
@@ -233,22 +260,24 @@ export async function generateRebuttal(
       role: 'system',
       content: `You are ${personaName}, an AI agent in a meme coin debate arena.
 
-Your personality: ${personaPrompt}
+Core personality: ${personaPrompt}
 
-You are in the REBUTTAL phase. You must respond to another agent's argument. Respond in JSON:
-{"rebuttal": "Your 1-2 sentence rebuttal addressing their specific points"}
+You are in the REBUTTAL phase. Respond in JSON:
+{"rebuttal": "1-2 sentences directly attacking the opponent's specific argument"}
 
-Rules:
-- Directly address their reasoning, don't just repeat your position
-- Reference specific data points that counter their argument
-- Be concise (1-2 sentences)
+Critical rules:
+- Attack a specific claim they made — quote or paraphrase it then tear it apart
+- Bring at least ONE data point or logical angle they did NOT mention
+- Do NOT repeat what you said in your own argument. This must be NEW reasoning.
+- Be sharp and adversarial. You are trying to WIN this debate.
+- Never concede your core stance. You may acknowledge a narrow point but immediately pivot back.
 - You MUST respond with valid JSON only${LANG_INSTRUCTION}`,
     },
     {
       role: 'user',
-      content: `Token data:\n${tokenCtx}\n\nArgument to rebut:\nAgent: ${target.persona}\nStance: ${target.stance.toUpperCase()}\nConfidence: ${target.confidence}%\nReasoning: "${target.reasoning}"`,
+      content: `Token data:\n${tokenCtx}\n\nOpponent's argument to rebut:\nAgent: ${target.persona}\nStance: ${target.stance.toUpperCase()}\nConfidence: ${target.confidence}%\nReasoning: "${target.reasoning}"`,
     },
-  ], 0.8);
+  ], 0.9);
 
   if (!raw) return null;
 
@@ -285,24 +314,27 @@ export async function generateVote(
   const raw = await chatCompletion([
     {
       role: 'system',
-      content: `You are ${personaName}, an AI agent casting your final vote after hearing all debate arguments.
+      content: `You are ${personaName}, casting your final vote in a meme coin debate.
 
-Your personality: ${personaPrompt}
+Core personality: ${personaPrompt}
 
-You have heard all arguments. Now you must vote. You CAN change your mind if another agent made a more compelling case. Respond in JSON:
+You have heard all arguments. Respond in JSON:
 {"vote": "bull" | "bear" | "hold", "confidence": 0-95}
 
-Rules:
-- Consider ALL arguments, not just your own bias
-- If an opponent presented strong data-backed evidence, you SHOULD change your vote
-- Confidence should reflect how certain you are after hearing all sides
+Critical rules:
+- You are deeply opinionated. Do NOT default to HOLD just because there was debate.
+- Only switch your original stance if the opponent made an OVERWHELMINGLY superior argument backed by data you cannot refute.
+- ALPHA BULL personality: strong prior toward bull — needs extraordinary evidence to vote bear.
+- SIGMA BEAR personality: strong prior toward bear — needs extraordinary evidence to vote bull.
+- DATA MONK personality: purely data-driven, will commit to bull or bear if any metric clearly dominates.
+- Confidence below 40% is almost never appropriate — commit to your reading.
 - You MUST respond with valid JSON only${LANG_INSTRUCTION}`,
     },
     {
       role: 'user',
-      content: `Token data:\n${tokenCtx}\n\nAll debate arguments:\n${argsSummary}\n\nCast your vote:`,
+      content: `Token data:\n${tokenCtx}\n\nAll debate arguments:\n${argsSummary}\n\nCast your final vote:`,
     },
-  ], 0.6);
+  ], 0.7);
 
   if (!raw) return null;
 
