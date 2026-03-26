@@ -30,7 +30,23 @@ const TRANSLATIONS = {
     riskLevel: "Risk Level",
     highRisk: "HIGH_RISK",
     lowRisk: "LOW_RISK",
-    langToggle: "CN"
+    langToggle: "CN",
+    // New i18n keys
+    nodesActive: "NODES_ACTIVE:",
+    debateHistory: "DEBATE_HISTORY",
+    viewingArchived: "◈ VIEWING ARCHIVED:",
+    returnToLive: "RETURN TO LIVE",
+    devRug: "DEV_RUG",
+    confidenceLabel: "CONFIDENCE:",
+    phases: {
+      QUICK_SCORE: "QUICK_SCORE",
+      ARGUING: "ARGUING",
+      REBUTTAL: "REBUTTAL",
+      VOTING: "VOTING",
+      DONE: "DONE",
+      ARCHIVED: "ARCHIVED",
+      WAITING: "WAITING",
+    },
   },
   zh: {
     subtitle: "去中心化 AI 链上共识网络",
@@ -51,7 +67,23 @@ const TRANSLATIONS = {
     riskLevel: "合约风险评级",
     highRisk: "高风险",
     lowRisk: "低风险",
-    langToggle: "EN"
+    langToggle: "EN",
+    // New i18n keys
+    nodesActive: "活跃节点:",
+    debateHistory: "辩论历史",
+    viewingArchived: "◈ 历史档案:",
+    returnToLive: "返回实时",
+    devRug: "Dev归零风险",
+    confidenceLabel: "置信度:",
+    phases: {
+      QUICK_SCORE: "快速评分",
+      ARGUING: "激辩阶段",
+      REBUTTAL: "反驳阶段",
+      VOTING: "投票中",
+      DONE: "已完成",
+      ARCHIVED: "历史档案",
+      WAITING: "等待中",
+    },
   }
 };
 
@@ -540,7 +572,7 @@ export function ArenaPage() {
             {connected ? 'LIVE' : 'OFFLINE'}
           </span>
           <span className="status-pill">
-            NODES_ACTIVE: {agents.filter(a => !a.agentId.startsWith('viewer-')).length}
+            {t.nodesActive} {agents.filter(a => !a.agentId.startsWith('viewer-')).length}
           </span>
         </div>
       </div>
@@ -598,14 +630,14 @@ export function ArenaPage() {
               padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
             }}>
               <span style={{color: 'var(--accent-neon)', fontFamily: 'var(--font-mono)', fontWeight: 600, letterSpacing: '0.05em'}}>
-                ◈ VIEWING ARCHIVED RECORD: ${displayToken?.symbol} ◈
+                {t.viewingArchived} ${displayToken?.symbol} ◈
               </span>
               <button 
                 className="btn btn--primary btn--sm" 
                 onClick={() => setSelectedHistoryIdx(null)}
                 style={{background: 'var(--accent-cyan)', color: '#000', border: 'none'}}
               >
-                RETURN TO LIVE
+                {t.returnToLive}
               </button>
             </div>
           )}
@@ -620,7 +652,7 @@ export function ArenaPage() {
               </div>
               <div className="arena-token-bar__phase">
                 <span className={`arena-phase-badge arena-phase-badge--${displayPhase.toLowerCase()}`}>
-                  {displayPhase}
+                  {t.phases[displayPhase as keyof typeof t.phases] ?? displayPhase}
                 </span>
                 {displayTimeLeft > 0 && (
                   <span className="arena-timer">{(displayTimeLeft / 1000).toFixed(0)}s</span>
@@ -644,7 +676,7 @@ export function ArenaPage() {
                         {msg.stance === 'bull' ? 'BULL' : msg.stance === 'bear' ? 'BEAR' : 'HOLD'}
                       </span>
                       <span className="arena-msg__persona">{msg.persona}</span>
-                      <span className="arena-msg__confidence">CONFIDENCE: {msg.confidence}%</span>
+                      <span className="arena-msg__confidence">{t.confidenceLabel} {msg.confidence}%</span>
                       <span style={{marginLeft: '8px', fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)'}}>{time}</span>
                     </div>
                     <div className="arena-msg__content">{msg.content}</div>
@@ -762,7 +794,7 @@ export function ArenaPage() {
                 )}
                 {displayToken.bitget.devRugPercent != null && (
                   <div className="arena-data-item">
-                    <span className="arena-data-item__label">DEV_RUG</span>
+                    <span className="arena-data-item__label">{t.devRug}</span>
                     <span className={`arena-data-item__value ${parseFloat(displayToken.bitget.devRugPercent) > 50 ? 'arena-data-item__value--danger' : 'arena-data-item__value--safe'}`}>
                       {parseFloat(displayToken.bitget.devRugPercent).toFixed(1)}%
                     </span>
@@ -776,7 +808,7 @@ export function ArenaPage() {
           {debateHistory.length > 0 && (
             <div className="arena-data-summary">
               <div className="section-card__header">
-                <span className="section-card__title">DEBATE_HISTORY ({debateHistory.length})</span>
+                <span className="section-card__title">{t.debateHistory} ({debateHistory.length})</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '300px', overflowY: 'auto' }}>
                 {debateHistory.map((h, i) => {
