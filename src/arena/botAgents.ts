@@ -28,14 +28,14 @@ const PERSONAS: BotPersona[] = [
     agentId: 'alpha-bull',
     persona: 'ALPHA BULL',
     bias: 'bullish',
-    biasStrength: 0.3,
+    biasStrength: 0.5,
     prompt: 'Aggressive meme coin trader who looks for moonshot potential but respects hard red flags.',
   },
   {
     agentId: 'sigma-bear',
     persona: 'SIGMA BEAR',
     bias: 'bearish',
-    biasStrength: 0.3,
+    biasStrength: 1.5,  // strong bearish bias: -45 score adjustment, forces disagreement → LLM full debate
     prompt: 'Cautious analyst who protects capital but acknowledges when data is genuinely strong.',
   },
   {
@@ -46,6 +46,7 @@ const PERSONAS: BotPersona[] = [
     prompt: 'Pure data analyst. No emotions, only numbers. Follows wherever the metrics lead.',
   },
 ];
+
 
 // ---------------------------------------------------------------------------
 // Fallback scoring engine (used when LLM is unavailable)
