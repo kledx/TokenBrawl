@@ -1,0 +1,31 @@
+{
+  "name": "agent-colosseum",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Agent Colosseum Arena — Decentralized AI Agent Debate Platform for Solana Meme Coins",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "arena": "tsx src/arena/startArena.ts",
+    "arena:bots": "tsx src/arena/botAgents.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "ws": "^8.18.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.5.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "~5.7.0",
+    "vite": "^6.0.0"
+  }
+}

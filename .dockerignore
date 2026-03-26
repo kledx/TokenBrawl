@@ -1,0 +1,19 @@
+# Ignore build artifacts and local dev files
+node_modules/
+dist/
+.env
+*.env.local
+
+# Dev/IDE files
+.git/
+.gitignore
+*.log
+*.md
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Orchestrator docs (not needed in image)
+orchestrator/
+skills/

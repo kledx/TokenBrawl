@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  # ─── Arena WebSocket Server ───────────────────────────────
+  arena:
+    image: ${ARENA_IMAGE:-ghcr.io/kledx/tokenbrawl/arena:latest}
+    container_name: tokenbrawl
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      - ARENA_PORT=${ARENA_PORT:-3001}
+    # Arena is NOT exposed publicly; Nginx proxies /arena → arena:3001
+    networks:
+      - dokploy-network
+      - default
+
+  # ─── Web (Nginx + Vite static) ────────────────────────────
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/kledx/tokenbrawl/web:latest}
+    container_name: colosseum-web
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      - arena
+    networks:
+      - dokploy-network
+      - default
+
+networks:
+  dokploy-network:
+    external: true

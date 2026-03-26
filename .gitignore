@@ -1,0 +1,26 @@
+# ──────── Dependencies ────────────────────────────────────────
+node_modules/
+
+# ──────── Build output ────────────────────────────────────────
+dist/
+
+# ──────── Environment secrets ─────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ──────── Orchestrator (internal Agent workspace) ─────────────
+orchestrator/
+
+# ──────── Logs ────────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ──────── OS / Editor ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ──────── TypeScript cache ────────────────────────────────────
+*.tsbuildinfo

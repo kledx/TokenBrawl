@@ -1,0 +1,757 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import type {
+  ServerMessage, ArenaAgent, Argument,
+  ConsensusResult, TokenDataPack, Stance,
+} from '../arena/types';
+import { X402DocsPanel } from './X402DocsPanel';
+import { AgentDocsPanel } from './AgentDocsPanel';
+
+// ---------------------------------------------------------------------------
+// Translations
+// ---------------------------------------------------------------------------
+
+const TRANSLATIONS = {
+  en: {
+    subtitle: "Decentralized AI Consensus Protocol",
+    connectedNodes: "Connected Nodes",
+    noAgents: "No nodes connected",
+    winRate: "Win rate",
+    enterMint: "Paste token mint address...",
+    execute: "EXECUTE",
+    consensus: "Consensus",
+    confidence: "CONFIDENCE",
+    topArgs: "Top Arguments",
+    awaitingData: "AWAITING_DATA",
+    systemIdle: "SYSTEM_IDLE",
+    onchainData: "On-Chain Data",
+    holders: "Holders",
+    liquidity: "Liquidity",
+    top10Hold: "Top10 Hold",
+    riskLevel: "Risk Level",
+    highRisk: "HIGH_RISK",
+    lowRisk: "LOW_RISK",
+    langToggle: "CN"
+  },
+  zh: {
+    subtitle: "去中心化 AI 链上共识网络",
+    connectedNodes: "已接入节点 (Nodes)",
+    noAgents: "暂无节点接入",
+    winRate: "历史胜率",
+    enterMint: "输入代币 Mint 目标地址...",
+    execute: "执行协议",
+    consensus: "全局共识 (Consensus)",
+    confidence: "置信度",
+    topArgs: "核心论点 (Top Args)",
+    awaitingData: "等待网络情报...",
+    systemIdle: "系统空闲中",
+    onchainData: "链上数据 (On-Chain)",
+    holders: "持币地址数",
+    liquidity: "流动性池",
+    top10Hold: "前十持仓占比",
+    riskLevel: "合约风险评级",
+    highRisk: "高风险",
+    lowRisk: "低风险",
+    langToggle: "EN"
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Types for local UI state
+// ---------------------------------------------------------------------------
+
+interface ChatMessage {
+  id: string;
+  type: 'system' | 'argument' | 'rebuttal' | 'vote' | 'result' | 'separator';
+  agentId?: string;
+  persona?: string;
+  stance?: Stance;
+  content: string;
+  confidence?: number;
+  timestamp: number;
+}
+
+// Map persona keywords to emojis for richer avatars
+const PERSONA_EMOJI: Record<string, string> = {
+  'alpha bull': '🐂',
+  'sigma bear': '🐻',
+  'data monk': '📊',
+  'bull': '🟢',
+  'bear': '🔴',
+  'hold': '🟡',
+};
+
+const PERSONA_AVATAR: Record<string, string> = {
+  'alpha bull': '/agents/alpha_bull.png',
+  'sigma bear': '/agents/sigma_bear.png',
+  'data monk': '/agents/data_monk.png',
+};
+
+function getPersonaEmoji(persona: string): React.ReactNode {
+  const key = persona.toLowerCase();
+  for (const [k, v] of Object.entries(PERSONA_AVATAR)) {
+    if (key.includes(k)) {
+      return (
+        <div style={{
+          width: '100%', height: '100%', 
+          backgroundImage: `url(${v})`, backgroundSize: 'cover', backgroundPosition: 'center',
+          borderRadius: '4px'
+        }} />
+      );
+    }
+  }
+  for (const [k, v] of Object.entries(PERSONA_EMOJI)) {
+    if (key.includes(k)) return v;
+  }
+  return '⚡';
+}
+
+// ---------------------------------------------------------------------------
+// ArenaPage Component
+// ---------------------------------------------------------------------------
+
+export function ArenaPage() {
+  const [view, setView] = useState<'arena' | 'api' | 'agent'>('arena');
+  const [connected, setConnected] = useState(false);
+  const [agents, setAgents] = useState<ArenaAgent[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [currentToken, setCurrentToken] = useState<TokenDataPack | null>(null);
+  const [phase, setPhase] = useState<string>('WAITING');
+  const [deadline, setDeadline] = useState<number>(0);
+  const [result, setResult] = useState<ConsensusResult | null>(null);
+  const [mintInput, setMintInput] = useState('');
+  const [lang, setLang] = useState<'en' | 'zh'>('en');
+  const [debateHistory, setDebateHistory] = useState<Array<{
+    token: { symbol: string; name: string; marketCapSol?: number; bitget?: any; };
+    consensus: string;
+    confidence: number;
+    totalAgents: number;
+    wasEscalated: boolean;
+    timestamp: number;
+    chatLog: ChatMessage[];
+    fullResult?: ConsensusResult;
+  }>>([]);
+  const [selectedHistoryIdx, setSelectedHistoryIdx] = useState<number | null>(null);
+
+  const t = TRANSLATIONS[lang];
+
+  const wsRef = useRef<WebSocket | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
+  const msgIdRef = useRef(0);
+  const messagesRef = useRef<ChatMessage[]>([]);
+
+  const arenaUrl = import.meta.env?.VITE_ARENA_WS_URL || 'ws://localhost:3001';
+
+  const addMessage = useCallback((msg: Omit<ChatMessage, 'id' | 'timestamp'>) => {
+    const id = `msg-${++msgIdRef.current}`;
+    const fullMsg: ChatMessage = { ...msg, id, timestamp: Date.now() } as ChatMessage;
+    setMessages(prev => {
+      const next = [...prev, fullMsg];
+      messagesRef.current = next;
+      return next;
+    });
+  }, []);
+
+  // Connect to Arena as observer
+  // Use a ref-based approach to prevent StrictMode duplicate connections
+  useEffect(() => {
+    let cancelled = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let ws: WebSocket | null = null;
+
+    const connect = () => {
+      if (cancelled) return;
+
+      // Close any previous connection before creating a new one
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+
+      ws = new WebSocket(arenaUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        if (cancelled) { ws?.close(); return; }
+        setConnected(true);
+        // Join as observer (frontend viewer)
+        ws!.send(JSON.stringify({
+          type: 'join',
+          agentId: `viewer-${Date.now().toString(36)}`,
+          persona: '[OBSERVER_NODE]',
+        }));
+        addMessage({ type: 'system', content: '[SYS] CONNECTION_ESTABLISHED: SECURE_CHANNEL_OPEN' });
+      };
+
+      ws.onmessage = (event) => {
+        if (cancelled) return;
+        try {
+          const msg: ServerMessage = JSON.parse(event.data);
+          handleServerMessage(msg);
+        } catch {
+          // skip
+        }
+      };
+
+      ws.onclose = () => {
+        if (cancelled) return;
+        setConnected(false);
+        // Connection state shown via LIVE/OFFLINE pill — no need to flood the chat feed
+        reconnectTimer = setTimeout(connect, 3000);
+      };
+
+      ws.onerror = () => {
+        // onclose will handle reconnect
+      };
+    };
+
+    const handleServerMessage = (msg: ServerMessage) => {
+      switch (msg.type) {
+        case 'welcome':
+          setAgents(msg.agents);
+          break;
+
+        case 'agent_joined':
+          setAgents(prev => [...prev.filter(a => a.agentId !== msg.agent.agentId), msg.agent]);
+          addMessage({
+            type: 'system',
+            content: `[NODE_JOIN] ${msg.agent.persona} entered the pool. (ACTIVE_NODES: ${msg.totalAgents})`,
+          });
+          break;
+
+        case 'agent_left':
+          setAgents(prev => prev.filter(a => a.agentId !== msg.agentId));
+          addMessage({
+            type: 'system',
+            content: `[NODE_LEAVE] ${msg.agentId} disconnected. (ACTIVE_NODES: ${msg.totalAgents})`,
+          });
+          break;
+
+        case 'quick_score_phase':
+          setCurrentToken(msg.token);
+          setPhase('QUICK_SCORE');
+          setDeadline(msg.deadline);
+          setResult(null);
+          // LIVE feed only shows the current debate
+          setMessages([]);
+          messagesRef.current = [];
+          
+          addMessage({
+            type: 'system',
+            content: `[EVENT] QUICK_SCAN: $${msg.token.symbol} (${msg.token.name}) | MCAP: ${msg.token.marketCapSol.toFixed(1)} SOL`,
+          });
+          break;
+
+        case 'quick_score_received': {
+          const qsStance = msg.stance === 'bull' ? '🟢 BULL' : msg.stance === 'bear' ? '🔴 BEAR' : '⚪ HOLD';
+          addMessage({
+            type: 'argument',
+            agentId: msg.agentId,
+            stance: msg.stance,
+            content: `⚡ Quick Score: ${qsStance} @ ${msg.confidence}%`,
+            confidence: msg.confidence,
+          });
+          break;
+        }
+
+        case 'debate_start':
+          setCurrentToken(msg.token);
+          setPhase('ARGUING');
+          setDeadline(msg.deadline);
+          // Only clear if this is NOT an escalation (escalation keeps quick score messages)
+          if (!result) {
+            setResult(null);
+          }
+          addMessage({
+            type: 'system',
+            content: `[EVENT] 🔥 DEBATE_ESCALATED: $${msg.token.symbol} — disagreement detected, full argument phase`,
+          });
+          break;
+
+        case 'argument_received':
+          addMessage({
+            type: 'argument',
+            agentId: msg.argument.agentId,
+            persona: msg.argument.persona,
+            stance: msg.argument.stance,
+            content: msg.argument.reasoning,
+            confidence: msg.argument.confidence,
+          });
+          break;
+
+        case 'rebuttal_phase':
+          setPhase('REBUTTAL');
+          setDeadline(msg.deadline);
+          addMessage({ type: 'system', content: `[PHASE_SHIFT] REBUTTAL_SEQUENCE_ENGAGED` });
+          break;
+
+        case 'rebuttal_received':
+          addMessage({
+            type: 'rebuttal',
+            agentId: msg.rebuttal.agentId,
+            persona: msg.rebuttal.persona,
+            content: `→ @${msg.rebuttal.targetAgentId}: ${msg.rebuttal.content}`,
+          });
+          break;
+
+        case 'vote_phase':
+          setPhase('VOTING');
+          setDeadline(msg.deadline);
+          addMessage({ type: 'system', content: '[PHASE_SHIFT] VOTING_SEQUENCE_ENGAGED' });
+          break;
+
+        case 'vote_received': {
+          const stancePrefix = msg.vote === 'bull' ? '[BULL]' : msg.vote === 'bear' ? '[BEAR]' : '[HOLD]';
+          addMessage({
+            type: 'vote',
+            agentId: msg.agentId,
+            stance: msg.vote,
+            content: `${stancePrefix} Node <${msg.agentId}> cast vote: ${msg.vote.toUpperCase()}`,
+          });
+          break;
+        }
+
+        case 'debate_result': {
+          setPhase('DONE');
+          setResult(msg.result);
+          const modeTag = (msg as any).wasEscalated ? '🔥 FULL_DEBATE' : '⚡ QUICK_CONSENSUS';
+          addMessage({
+            type: 'result',
+            content: `[RESULT] ${modeTag}: ${msg.result.consensus.toUpperCase()} | CONFIDENCE: ${msg.result.consensusConfidence}% | NODES: ${msg.result.totalAgents}`,
+          });
+          // Accumulate history with full chat log
+          // Use ref for latest messages to avoid React batching race condition
+          setDebateHistory(prev => [{
+            token: msg.result.token,
+            consensus: msg.result.consensus,
+            confidence: msg.result.consensusConfidence,
+            totalAgents: msg.result.totalAgents,
+            wasEscalated: !!(msg as any).wasEscalated,
+            timestamp: Date.now(),
+            chatLog: [...messagesRef.current],
+            fullResult: msg.result,
+          }, ...prev].slice(0, 30));
+          break;
+        }
+      }
+    };
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) {
+        ws.onclose = null; // prevent reconnect on intentional close
+        ws.close();
+      }
+      wsRef.current = null;
+    };
+  }, [arenaUrl, addMessage]);
+
+  // Auto-scroll chat without shifting viewport
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  // Request debate on specific mint
+  const requestDebate = () => {
+    if (mintInput.trim() && wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'request_debate', mint: mintInput.trim() }));
+      addMessage({ type: 'system', content: `[TX] DEBATE_REQUEST_SENT_TO_MEMPOOL: ${mintInput.trim().slice(0, 12)}...` });
+      setMintInput('');
+    }
+  };
+
+  // Countdown timer
+  const [timeLeft, setTimeLeft] = useState(0);
+  useEffect(() => {
+    if (!deadline) return;
+    const interval = setInterval(() => {
+      const left = Math.max(0, deadline - Date.now());
+      setTimeLeft(left);
+      if (left === 0) clearInterval(interval);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [deadline]);
+
+  // History Mode resolution
+  const isHistoryMode = selectedHistoryIdx !== null && debateHistory[selectedHistoryIdx] !== undefined;
+  const historyItem = isHistoryMode ? debateHistory[selectedHistoryIdx] : null;
+
+  const displayToken = isHistoryMode ? historyItem!.token : currentToken;
+  const displayPhase = isHistoryMode ? 'ARCHIVED' : phase;
+  const displayTimeLeft = isHistoryMode ? 0 : timeLeft;
+  const displayMessages = isHistoryMode ? historyItem!.chatLog : messages;
+  const displayResult = isHistoryMode ? historyItem!.fullResult : result;
+
+  return (
+    <div className="arena-dashboard">
+      <div className="arena-watermark">AC.NET // GLOBAL_CONSENSUS_PROTOCOL_V2.1</div>
+
+      {/* Decorative Left Sidebar */}
+      <div className="arena-sidebar">
+        <div className="arena-sidebar__line"></div>
+        <div className="arena-sidebar__text">
+          <span>SYS.CTRL // CORE_ACTIVE</span>
+          <span>NET: MAINNET-BETA</span>
+        </div>
+      </div>
+
+      <div className="arena-page">
+      {/* Header */}
+      <div className="arena-header">
+        <div className="arena-header__left" style={{ alignItems: 'center' }}>
+          <div className="arena-header__logo" style={{
+            width: '56px', height: '56px', 
+            backgroundImage: 'url(/tokenbrawl_logo.png)', 
+            backgroundSize: 'contain', 
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat', 
+            marginRight: '16px',
+            borderRadius: '12px',
+            border: '1px solid rgba(255,255,255,0.15)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+          }}></div>
+          <div>
+            <h1 className="arena-header__title">TERMINAL // TokenBrawl</h1>
+            <p className="arena-header__subtitle">{t.subtitle}</p>
+          </div>
+        </div>
+        <div className="arena-header__right">
+          {/* View toggle: ARENA / AGENT / API */}
+          <div style={{ display: 'flex', gap: '4px', marginRight: '16px' }}>
+            {(['arena', 'agent', 'api'] as const).map(v => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                style={{
+                  background: view === v ? 'rgba(0,255,200,0.15)' : 'transparent',
+                  border: `1px solid ${view === v ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.2)'}`,
+                  color: view === v ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                  fontFamily: 'var(--font-mono)', fontSize: '10px',
+                  padding: '4px 10px', cursor: 'pointer', borderRadius: '3px',
+                  letterSpacing: '0.08em', transition: 'all 0.15s',
+                }}
+              >
+                {v.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <button 
+            onClick={() => setLang(l => l === 'en' ? 'zh' : 'en')}
+            style={{
+              background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', 
+              color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '10px',
+              padding: '4px 8px', cursor: 'pointer', marginRight: '16px'
+            }}
+          >
+            {t.langToggle}
+          </button>
+          <span className={`status-pill ${connected ? 'status-pill--live' : 'status-pill--offline'}`}>
+            <span className="status-dot"></span>
+            {connected ? 'LIVE' : 'OFFLINE'}
+          </span>
+          <span className="status-pill">
+            NODES_ACTIVE: {agents.filter(a => !a.agentId.startsWith('viewer-')).length}
+          </span>
+        </div>
+      </div>
+
+      {view === 'api' && <X402DocsPanel lang={lang} />}
+      {view === 'agent' && <AgentDocsPanel lang={lang} />}
+
+      <div className="arena-body" style={{ display: (view === 'api' || view === 'agent') ? 'none' : undefined }}>
+        {/* Left: Agents panel */}
+        <div className="arena-agents">
+          <div className="section-card__header">
+            <span className="section-card__title">{t.connectedNodes}</span>
+          </div>
+          <div className="arena-agents__list">
+            {agents
+              .filter(a => !a.agentId.startsWith('viewer-') && !a.persona.startsWith('[OBSERVER'))
+              .map(agent => (
+              <div key={agent.agentId} className="arena-agent-card">
+                <div className="arena-agent-card__avatar">
+                  {getPersonaEmoji(agent.persona)}
+                </div>
+                <div className="arena-agent-card__info">
+                  <div className="arena-agent-card__name">{agent.persona.replace(/[🟢🔴📊]/g, '').trim()}</div>
+                  <div className="arena-agent-card__meta">
+                    {t.winRate}: {(agent.stats.winRate * 100).toFixed(0)}%
+                  </div>
+                </div>
+              </div>
+            ))}
+            {agents.filter(a => !a.agentId.startsWith('viewer-') && !a.persona.startsWith('[OBSERVER')).length === 0 && (
+              <div className="arena-agents__empty">{t.noAgents}</div>
+            )}
+          </div>
+
+          {/* Debate request */}
+          <div className="arena-debate-request">
+            <input
+              className="arena-mint-input"
+              placeholder={t.enterMint}
+              value={mintInput}
+              onChange={e => setMintInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && requestDebate()}
+            />
+            <button className="btn btn--primary btn--sm" onClick={requestDebate} style={{textTransform:'uppercase', letterSpacing:'0.05em'}}>
+              {t.execute}
+            </button>
+          </div>
+        </div>
+
+        {/* Center: Chat stream */}
+        <div className="arena-chat">
+          {isHistoryMode && (
+            <div style={{
+              background: 'rgba(0, 255, 200, 0.1)', borderBottom: '1px solid var(--accent-cyan)',
+              padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+            }}>
+              <span style={{color: 'var(--accent-neon)', fontFamily: 'var(--font-mono)', fontWeight: 600, letterSpacing: '0.05em'}}>
+                ◈ VIEWING ARCHIVED RECORD: ${displayToken?.symbol} ◈
+              </span>
+              <button 
+                className="btn btn--primary btn--sm" 
+                onClick={() => setSelectedHistoryIdx(null)}
+                style={{background: 'var(--accent-cyan)', color: '#000', border: 'none'}}
+              >
+                RETURN TO LIVE
+              </button>
+            </div>
+          )}
+
+          {/* Token info bar */}
+          {displayToken && (
+            <div className="arena-token-bar">
+              <div className="arena-token-bar__info">
+                <span className="arena-token-bar__symbol">${displayToken.symbol}</span>
+                <span className="arena-token-bar__name">{displayToken.name}</span>
+                <span className="arena-token-bar__mcap">{displayToken.marketCapSol?.toFixed(1) || '0'} SOL</span>
+              </div>
+              <div className="arena-token-bar__phase">
+                <span className={`arena-phase-badge arena-phase-badge--${displayPhase.toLowerCase()}`}>
+                  {displayPhase}
+                </span>
+                {displayTimeLeft > 0 && (
+                  <span className="arena-timer">{(displayTimeLeft / 1000).toFixed(0)}s</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Messages */}
+          <div className="arena-chat__messages" ref={chatContainerRef}>
+            {displayMessages.map(msg => {
+              const time = new Date(msg.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' });
+              return (
+              <div key={msg.id} className={`arena-msg arena-msg--${msg.type} animate-fade-in`}>
+                {msg.type === 'system' ? (
+                  <div className="arena-msg__system">[{time}] {msg.content}</div>
+                ) : msg.type === 'argument' ? (
+                  <div className="arena-msg__argument">
+                    <div className="arena-msg__header">
+                      <span className={`arena-stance arena-stance--${msg.stance}`}>
+                        {msg.stance === 'bull' ? 'BULL' : msg.stance === 'bear' ? 'BEAR' : 'HOLD'}
+                      </span>
+                      <span className="arena-msg__persona">{msg.persona}</span>
+                      <span className="arena-msg__confidence">CONFIDENCE: {msg.confidence}%</span>
+                      <span style={{marginLeft: '8px', fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)'}}>{time}</span>
+                    </div>
+                    <div className="arena-msg__content">{msg.content}</div>
+                  </div>
+                ) : msg.type === 'rebuttal' ? (
+                  <div className="arena-msg__rebuttal">
+                    <div style={{display: 'flex', gap: '8px', alignItems:'center'}}>
+                      <span className="arena-msg__persona">{msg.persona}</span>
+                      <span style={{fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)'}}>{time}</span>
+                    </div>
+                    <span className="arena-msg__content">{msg.content}</span>
+                  </div>
+                ) : msg.type === 'result' ? (
+                  <div className="arena-msg__result">[{time}] {msg.content}</div>
+                ) : msg.type === 'separator' ? (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '12px',
+                    padding: '10px 0', margin: '4px 0',
+                  }}>
+                    <div style={{ flex: 1, height: '1px', background: 'linear-gradient(90deg, transparent, var(--accent-cyan), transparent)' }} />
+                    <span style={{
+                      fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--accent-cyan)',
+                      letterSpacing: '0.1em', whiteSpace: 'nowrap', textTransform: 'uppercase',
+                    }}>
+                      ◈ ROUND: {msg.content} ◈
+                    </span>
+                    <div style={{ flex: 1, height: '1px', background: 'linear-gradient(90deg, transparent, var(--accent-cyan), transparent)' }} />
+                  </div>
+                ) : (
+                  <div className="arena-msg__vote">[{time}] {msg.content}</div>
+                )}
+              </div>
+            )})}
+          </div>
+        </div>
+
+        {/* Right: Consensus panel */}
+        <div className="arena-consensus">
+          <div className="section-card__header">
+            <span className="section-card__title">{t.consensus}</span>
+          </div>
+          {displayResult ? (
+              <div className="arena-consensus__result">
+              <div className={`arena-consensus__verdict arena-consensus__verdict--${displayResult.consensus}`}>
+                <span style={{letterSpacing: '0.1em'}}>[{displayResult.consensus.toUpperCase()}]</span>
+              </div>
+              <div className="arena-consensus__confidence">
+                {displayResult.consensusConfidence}% {t.confidence}
+              </div>
+              <div className="arena-consensus__token-info">
+                <span className="arena-consensus__token-symbol">${displayResult.token.symbol}</span>
+                <span className="arena-consensus__token-name">{displayResult.token.name}</span>
+              </div>
+              <div className="arena-consensus__votes">
+                <div className="arena-vote-bar">
+                  <div className="arena-vote-bar__fill arena-vote-bar__fill--bull"
+                    style={{ width: `${displayResult.totalAgents > 0 ? (displayResult.bullCount / displayResult.totalAgents) * 100 : 0}%` }} />
+                  <div className="arena-vote-bar__fill arena-vote-bar__fill--bear"
+                    style={{ width: `${displayResult.totalAgents > 0 ? (displayResult.bearCount / displayResult.totalAgents) * 100 : 0}%` }} />
+                  <div className="arena-vote-bar__fill arena-vote-bar__fill--hold"
+                    style={{ width: `${displayResult.totalAgents > 0 ? (displayResult.holdCount / displayResult.totalAgents) * 100 : 0}%` }} />
+                </div>
+                <div className="arena-vote-legend">
+                  <span>BULL: {displayResult.bullCount}</span>
+                  <span>BEAR: {displayResult.bearCount}</span>
+                  <span>HOLD: {displayResult.holdCount}</span>
+                </div>
+              </div>
+              {displayResult.topArguments.length > 0 && (
+                <div className="arena-consensus__top">
+                  <div className="section-card__title" style={{ marginBottom: '8px' }}>{t.topArgs}</div>
+                  {displayResult.topArguments.map((arg, i) => (
+                    <div key={i} className="arena-top-arg">
+                      <span className={`arena-stance arena-stance--${arg.stance}`}>
+                        {arg.stance === 'bull' ? 'BULL' : arg.stance === 'bear' ? 'BEAR' : 'HOLD'}
+                      </span>
+                      <span className="arena-top-arg__persona">{arg.persona}</span>
+                      <span className="arena-top-arg__confidence">{arg.confidence}%</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="arena-consensus__empty">
+              <div className="loader-pulse" style={{fontFamily: 'var(--font-mono)', letterSpacing: '0.1em'}}>{t.awaitingData}</div>
+              <p style={{fontFamily: 'var(--font-mono)', fontSize: '14px', color: 'var(--text-muted)'}}>{t.systemIdle}</p>
+            </div>
+          )}
+
+          {/* Bitget data summary */}
+          {displayToken?.bitget && (
+            <div className="arena-data-summary">
+              <div className="section-card__header">
+                <span className="section-card__title">{t.onchainData}</span>
+              </div>
+              <div className="arena-data-grid">
+                {displayToken.bitget.holders && (
+                  <div className="arena-data-item">
+                    <span className="arena-data-item__label">{t.holders}</span>
+                    <span className="arena-data-item__value">{displayToken.bitget.holders}</span>
+                  </div>
+                )}
+                {displayToken.bitget.liquidity && (
+                  <div className="arena-data-item">
+                    <span className="arena-data-item__label">{t.liquidity}</span>
+                    <span className="arena-data-item__value">${parseFloat(displayToken.bitget.liquidity).toFixed(3)}</span>
+                  </div>
+                )}
+                {displayToken.bitget.top10HolderPercent && (
+                  <div className="arena-data-item">
+                    <span className="arena-data-item__label">{t.top10Hold}</span>
+                    <span className="arena-data-item__value">{parseFloat(displayToken.bitget.top10HolderPercent).toFixed(3)}%</span>
+                  </div>
+                )}
+                {displayToken.bitget.devRugPercent != null && (
+                  <div className="arena-data-item">
+                    <span className="arena-data-item__label">DEV_RUG</span>
+                    <span className={`arena-data-item__value ${parseFloat(displayToken.bitget.devRugPercent) > 50 ? 'arena-data-item__value--danger' : 'arena-data-item__value--safe'}`}>
+                      {parseFloat(displayToken.bitget.devRugPercent).toFixed(1)}%
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Debate History */}
+          {debateHistory.length > 0 && (
+            <div className="arena-data-summary">
+              <div className="section-card__header">
+                <span className="section-card__title">DEBATE_HISTORY ({debateHistory.length})</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '300px', overflowY: 'auto' }}>
+                {debateHistory.map((h, i) => {
+                  const time = new Date(h.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit' });
+                  const consensusColor = h.consensus === 'bull' ? 'var(--accent-neon)'
+                    : h.consensus === 'bear' ? 'var(--danger)' : 'var(--text-muted)';
+                  const isExpanded = selectedHistoryIdx === i;
+                  return (
+                    <div key={i}>
+                      <div
+                        onClick={() => setSelectedHistoryIdx(isExpanded ? null : i)}
+                        style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: '6px 8px', background: isExpanded ? 'rgba(0,255,200,0.15)' : 'rgba(0,0,0,0.3)', borderRadius: '4px',
+                          fontFamily: 'var(--font-mono)', fontSize: '13px', cursor: 'pointer',
+                          borderLeft: isExpanded ? '3px solid var(--accent-cyan)' : '2px solid transparent',
+                          transition: 'all 0.2s',
+                        }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                          <span style={{ fontSize: '11px' }}>{h.wasEscalated ? '\uD83D\uDD25' : '\u26A1'}</span>
+                          <span style={{ color: 'var(--text-primary)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            ${h.token.symbol}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                          <span style={{ color: consensusColor, fontWeight: 700, fontSize: '12px' }}>
+                            {h.consensus.toUpperCase()}
+                          </span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
+                            {h.confidence}%
+                          </span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
+                            {time}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Decorative Bottom Ticker */}
+      <div className="arena-ticker">
+        <div className="arena-ticker__scroll">
+          <span>// GLOBAL_CONSENSUS_PROTOCOL_V2.1</span>
+          <span>// TOTAL_NODES_ONLINE: {agents.length}</span>
+          <span>// LATEST_BLOCK_HEARTBEAT: {Date.now().toString(16).toUpperCase()}</span>
+          <span>// SYSTEM_INTEGRITY: OPTIMAL</span>
+          <span>// SECURE_CHANNEL_ENCRYPTION_ENABLED</span>
+          <span>// GLOBAL_CONSENSUS_PROTOCOL_V2.1</span>
+          <span>// TOTAL_NODES_ONLINE: {agents.length}</span>
+          <span>// LATEST_BLOCK_HEARTBEAT: {Date.now().toString(16).toUpperCase()}</span>
+          <span>// SYSTEM_INTEGRITY: OPTIMAL</span>
+          <span>// SECURE_CHANNEL_ENCRYPTION_ENABLED</span>
+        </div>
+      </div>
+      </div>
+    </div>
+  );
+}
