@@ -278,9 +278,15 @@ export function ArenaPage() {
                 };
               });
             setDebateHistory(restored);
+            // Auto-select the most recent debate if no active debate is running,
+            // so the main dashboard shows data immediately on page load/refresh
+            if (!vs.activeDebate || vs.activeDebate.phase === 'DONE' || vs.activeDebate.phase === 'WAITING') {
+              setSelectedHistoryIdx(0);
+            }
           }
           break;
         }
+
 
 
         case 'welcome':
@@ -309,7 +315,8 @@ export function ArenaPage() {
           setPhase('QUICK_SCORE');
           setDeadline(msg.deadline);
           setResult(null);
-          // LIVE feed only shows the current debate
+          // New live debate starting — exit history mode and show live feed
+          setSelectedHistoryIdx(null);
           setMessages([]);
           messagesRef.current = [];
           
@@ -318,6 +325,7 @@ export function ArenaPage() {
             content: `[EVENT] QUICK_SCAN: $${msg.token.symbol} (${msg.token.name}) | MCAP: ${msg.token.marketCapSol.toFixed(1)} SOL`,
           });
           break;
+
 
         case 'quick_score_received': {
           const qsStance = msg.stance === 'bull' ? '🟢 BULL' : msg.stance === 'bear' ? '🔴 BEAR' : '⚪ HOLD';
