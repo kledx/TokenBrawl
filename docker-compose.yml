@@ -29,6 +29,23 @@ services:
       - dokploy-network
       - default
 
+  # ─── Bot Agents (LLM-powered AI debaters) ─────────────────
+  bots:
+    image: ${ARENA_IMAGE:-ghcr.io/kledx/tokenbrawl/arena:latest}
+    container_name: tokenbrawl-bots
+    restart: unless-stopped
+    pull_policy: always
+    # Connect bots to the internal arena service (no public DNS needed)
+    command: ["npx", "tsx", "src/arena/botAgents.ts", "ws://arena:3001"]
+    environment:
+      - ARENA_LLM_BASE_URL=${ARENA_LLM_BASE_URL:-}
+      - ARENA_LLM_API_KEY=${ARENA_LLM_API_KEY:-}
+      - ARENA_LLM_MODEL=${ARENA_LLM_MODEL:-gpt-4o-mini}
+    depends_on:
+      - arena
+    networks:
+      - default
+
 networks:
   dokploy-network:
     external: true
