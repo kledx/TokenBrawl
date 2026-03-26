@@ -153,7 +153,7 @@ export function ArenaPage() {
   const [mintInput, setMintInput] = useState('');
   const [lang, setLang] = useState<'en' | 'zh'>('en');
   const [debateHistory, setDebateHistory] = useState<Array<{
-    token: { symbol: string; name: string; marketCapSol?: number; bitget?: any; };
+    token: { symbol: string; name: string; marketCapSol?: number; bitget?: any; mint?: string; };
     consensus: string;
     confidence: number;
     totalAgents: number;
@@ -299,6 +299,7 @@ export function ArenaPage() {
                     name: d.token?.name ?? d.result?.token?.name ?? '',
                     marketCapSol: d.token?.marketCapSol,
                     bitget: d.token?.bitget,
+                    mint: d.token?.mint ?? d.result?.token?.mint,
                   },
                   consensus: d.result.consensus,
                   confidence: d.result.consensusConfidence,
@@ -439,7 +440,11 @@ export function ArenaPage() {
           // Accumulate history with full chat log
           // Use ref for latest messages to avoid React batching race condition
           setDebateHistory(prev => [{
-            token: msg.result.token,
+            token: {
+              symbol: msg.result.token.symbol,
+              name: msg.result.token.name,
+              mint: msg.result.token.mint,
+            },
             consensus: msg.result.consensus,
             confidence: msg.result.consensusConfidence,
             totalAgents: msg.result.totalAgents,
@@ -649,6 +654,25 @@ export function ArenaPage() {
                 <span className="arena-token-bar__symbol">${displayToken.symbol}</span>
                 <span className="arena-token-bar__name">{displayToken.name}</span>
                 <span className="arena-token-bar__mcap">{displayToken.marketCapSol?.toFixed(1) || '0'} SOL</span>
+                {displayToken.mint && (
+                  <a
+                    href={`https://solscan.io/token/${displayToken.mint}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={displayToken.mint}
+                    style={{
+                      fontFamily: 'var(--font-mono)', fontSize: '11px',
+                      color: 'var(--text-muted)', textDecoration: 'none',
+                      letterSpacing: '0.04em', cursor: 'pointer',
+                      borderBottom: '1px dashed rgba(255,255,255,0.2)',
+                      transition: 'color 0.15s',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent-cyan)')}
+                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+                  >
+                    {displayToken.mint.slice(0, 6)}…{displayToken.mint.slice(-4)}↗
+                  </a>
+                )}
               </div>
               <div className="arena-token-bar__phase">
                 <span className={`arena-phase-badge arena-phase-badge--${displayPhase.toLowerCase()}`}>
@@ -660,6 +684,7 @@ export function ArenaPage() {
               </div>
             </div>
           )}
+
 
           {/* Messages */}
           <div className="arena-chat__messages" ref={chatContainerRef}>
