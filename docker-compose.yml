@@ -20,8 +20,9 @@ services:
     container_name: colosseum-web
     restart: unless-stopped
     pull_policy: always
-    ports:
-      - "${WEB_PORT:-80}:80"
+    # Port 80 is NOT bound to host — Dokploy's Traefik proxies to container port 80 internally
+    expose:
+      - "80"
     depends_on:
       - arena
     networks:
