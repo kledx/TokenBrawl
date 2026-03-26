@@ -210,30 +210,78 @@ export function ArenaPage() {
         case 'viewer_state' as any: {
           const vs = msg as any;
           setAgents(vs.agents ?? []);
-          // Restore debate history from server (sorted newest-first)
           if (Array.isArray(vs.debateHistory) && vs.debateHistory.length > 0) {
             const restored = [...vs.debateHistory]
-              .reverse() // server stores oldest-first, UI shows newest-first
+              .reverse()
               .filter((d: any) => d.result)
-              .map((d: any) => ({
-                token: {
-                  symbol: d.token?.symbol ?? d.result?.token?.symbol ?? '?',
-                  name: d.token?.name ?? d.result?.token?.name ?? '',
-                  marketCapSol: d.token?.marketCapSol,
-                  bitget: d.token?.bitget,
-                },
-                consensus: d.result.consensus,
-                confidence: d.result.consensusConfidence,
-                totalAgents: d.result.totalAgents,
-                wasEscalated: d.wasEscalated ?? false,
-                timestamp: d.startedAt ?? Date.now(),
-                chatLog: [],   // chat log cannot be recovered after refresh
-                fullResult: d.result,
-              }));
+              .map((d: any) => {
+                // Rebuild chatLog from persisted server-side Debate object
+                const log: ChatMessage[] = [];
+                let seq = 0;
+                const mk = (type: ChatMessage['type'], extra: Partial<ChatMessage>, ts?: number): ChatMessage => ({
+                  id: `hist-${d.debateId}-${seq++}`,
+                  timestamp: ts ?? d.startedAt ?? Date.now(),
+                  content: '',
+                  type,
+                  ...extra,
+                });
+
+                // Quick scores
+                for (const qs of (d.quickScores ?? [])) {
+                  const label = qs.stance === 'bull' ? '🟢 BULL' : qs.stance === 'bear' ? '🔴 BEAR' : '⚪ HOLD';
+                  log.push(mk('argument', { agentId: qs.agentId, stance: qs.stance, content: `⚡ Quick Score: ${label} @ ${qs.confidence}%`, confidence: qs.confidence }));
+                }
+
+                // Arguments (ARGUING phase)
+                if ((d.arguments ?? []).length > 0) {
+                  log.push(mk('system', { content: '[EVENT] 🔥 DEBATE_ESCALATED — full argument phase' }));
+                  for (const a of d.arguments) {
+                    log.push(mk('argument', { agentId: a.agentId, persona: a.persona, stance: a.stance, content: a.reasoning, confidence: a.confidence }));
+                  }
+                }
+
+                // Rebuttals
+                if ((d.rebuttals ?? []).length > 0) {
+                  log.push(mk('system', { content: '[PHASE_SHIFT] REBUTTAL_SEQUENCE_ENGAGED' }));
+                  for (const r of d.rebuttals) {
+                    log.push(mk('rebuttal', { agentId: r.agentId, persona: r.persona, content: `→ @${r.targetAgentId}: ${r.content}` }));
+                  }
+                }
+
+                // Votes
+                if ((d.votes ?? []).length > 0) {
+                  log.push(mk('system', { content: '[PHASE_SHIFT] VOTING_SEQUENCE_ENGAGED' }));
+                  for (const v of d.votes) {
+                    const prefix = v.vote === 'bull' ? '[BULL]' : v.vote === 'bear' ? '[BEAR]' : '[HOLD]';
+                    log.push(mk('vote', { agentId: v.agentId, stance: v.vote, content: `${prefix} Node <${v.agentId}> cast vote: ${v.vote.toUpperCase()}` }));
+                  }
+                }
+
+                // Result
+                const modeTag = d.wasEscalated ? '🔥 FULL_DEBATE' : '⚡ QUICK_CONSENSUS';
+                log.push(mk('result', { content: `[RESULT] ${modeTag}: ${d.result.consensus.toUpperCase()} | CONFIDENCE: ${d.result.consensusConfidence}% | NODES: ${d.result.totalAgents}` }));
+
+                return {
+                  token: {
+                    symbol: d.token?.symbol ?? d.result?.token?.symbol ?? '?',
+                    name: d.token?.name ?? d.result?.token?.name ?? '',
+                    marketCapSol: d.token?.marketCapSol,
+                    bitget: d.token?.bitget,
+                  },
+                  consensus: d.result.consensus,
+                  confidence: d.result.consensusConfidence,
+                  totalAgents: d.result.totalAgents,
+                  wasEscalated: d.wasEscalated ?? false,
+                  timestamp: d.startedAt ?? Date.now(),
+                  chatLog: log,
+                  fullResult: d.result,
+                };
+              });
             setDebateHistory(restored);
           }
           break;
         }
+
 
         case 'welcome':
           setAgents(msg.agents);
