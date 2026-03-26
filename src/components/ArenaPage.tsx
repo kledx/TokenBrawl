@@ -207,9 +207,33 @@ export function ArenaPage() {
     const handleServerMessage = (msg: ServerMessage) => {
       switch (msg.type) {
         // Initial state snapshot sent on every new connection (before join handshake)
-        case 'viewer_state' as any:
-          setAgents((msg as any).agents ?? []);
+        case 'viewer_state' as any: {
+          const vs = msg as any;
+          setAgents(vs.agents ?? []);
+          // Restore debate history from server (sorted newest-first)
+          if (Array.isArray(vs.debateHistory) && vs.debateHistory.length > 0) {
+            const restored = [...vs.debateHistory]
+              .reverse() // server stores oldest-first, UI shows newest-first
+              .filter((d: any) => d.result)
+              .map((d: any) => ({
+                token: {
+                  symbol: d.token?.symbol ?? d.result?.token?.symbol ?? '?',
+                  name: d.token?.name ?? d.result?.token?.name ?? '',
+                  marketCapSol: d.token?.marketCapSol,
+                  bitget: d.token?.bitget,
+                },
+                consensus: d.result.consensus,
+                confidence: d.result.consensusConfidence,
+                totalAgents: d.result.totalAgents,
+                wasEscalated: d.wasEscalated ?? false,
+                timestamp: d.startedAt ?? Date.now(),
+                chatLog: [],   // chat log cannot be recovered after refresh
+                fullResult: d.result,
+              }));
+            setDebateHistory(restored);
+          }
           break;
+        }
 
         case 'welcome':
           setAgents(msg.agents);

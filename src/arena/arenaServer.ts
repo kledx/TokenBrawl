@@ -662,6 +662,7 @@ export class ArenaServer {
       agents: agentList,
       totalAgents: this.clients.size,
       activeDebate: this.currentDebate?.getState() ?? null,
+      debateHistory: this.debateHistory.slice(-30),
     } as unknown as ServerMessage);
 
     ws.on('pong', () => {
