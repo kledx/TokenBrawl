@@ -102,6 +102,13 @@ export class PriceTracker {
     };
   }
 
+  /** Restore records from persisted data (called on startup) */
+  loadRecords(records: BacktestRecord[]): void {
+    // Only load completed records (no pending timers needed for past data)
+    this.records = records.filter(r => r.wasCorrect !== undefined || r.priceAfter1h !== undefined);
+    console.log(`[Backtest] Restored ${this.records.length} historical records`);
+  }
+
   /** Clean up all timers */
   destroy(): void {
     for (const timers of this.pendingChecks.values()) {

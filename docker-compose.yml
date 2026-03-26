@@ -9,6 +9,8 @@ services:
     pull_policy: always
     environment:
       - ARENA_PORT=${ARENA_PORT:-3001}
+    volumes:
+      - arena-data:/data          # persist debate history & agent weights
     # Arena is NOT exposed publicly; Nginx proxies /arena → arena:3001
     networks:
       - dokploy-network
@@ -50,3 +52,6 @@ services:
 networks:
   dokploy-network:
     external: true
+
+volumes:
+  arena-data:      # debate history, agent weights — survives container restarts

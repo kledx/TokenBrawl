@@ -4,6 +4,8 @@
 
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
+import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
+import { resolve, dirname } from 'path';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type {
   ArenaAgent, AgentStats, ArenaConfig, ClientMessage, ServerMessage,
@@ -15,6 +17,10 @@ import { aggregateFromMint } from './dataAggregator';
 import { TokenDiscoveryEngine } from './tokenDiscovery';
 import { PriceTracker } from './priceTracker';
 import { x402Gate, getPricingTable } from './x402Middleware.js';
+
+// Persistence: save arena state to disk so data survives container restarts
+const ARENA_DATA_DIR = process.env.ARENA_DATA_DIR || '/data';
+const PERSIST_FILE = resolve(ARENA_DATA_DIR, 'arena-state.json');
 
 interface ConnectedClient {
   ws: WebSocket;
@@ -54,6 +60,9 @@ export class ArenaServer {
   }
 
   start(): void {
+    // Load persisted state from disk (survives container restarts)
+    this.loadState();
+
     // Create HTTP server for REST API
     this.httpServer = createServer((req, res) => this.handleHttp(req, res));
 
@@ -77,6 +86,9 @@ export class ArenaServer {
       });
     }, 30_000);
 
+    // Periodic save every 5 minutes
+    setInterval(() => this.saveState(), 5 * 60_000);
+
     if (this.config.autoDebateOnNewToken) {
       this.startDiscovery();
     }
@@ -91,6 +103,7 @@ export class ArenaServer {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
+    this.saveState(); // persist before shutdown
     this.discovery?.stop();
     this.discovery = null;
     this.priceTracker.destroy();
@@ -98,6 +111,52 @@ export class ArenaServer {
     this.wss?.close();
     this.httpServer?.close();
     console.log('[Arena] Server stopped');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Persistence — save/load arena state to JSON file
+  // ---------------------------------------------------------------------------
+
+  private saveState(): void {
+    try {
+      mkdirSync(dirname(PERSIST_FILE), { recursive: true });
+      const state = {
+        version: 1,
+        savedAt: Date.now(),
+        debateCounter: this.debateCounter,
+        debateHistory: this.debateHistory.slice(-50),
+        agentWeights: Object.fromEntries(this.agentWeights),
+        priceRecords: this.priceTracker.getRecords(),
+      };
+      writeFileSync(PERSIST_FILE, JSON.stringify(state), 'utf-8');
+      console.log(`[Arena] State saved → ${PERSIST_FILE} (${this.debateHistory.length} debates)`);
+    } catch (err) {
+      console.error('[Arena] Failed to save state:', (err as Error).message);
+    }
+  }
+
+  private loadState(): void {
+    try {
+      if (!existsSync(PERSIST_FILE)) {
+        console.log('[Arena] No persisted state found — starting fresh');
+        return;
+      }
+      const raw = readFileSync(PERSIST_FILE, 'utf-8');
+      const state = JSON.parse(raw);
+      if (state.version !== 1) {
+        console.warn('[Arena] Incompatible state version, skipping load');
+        return;
+      }
+      this.debateCounter = state.debateCounter ?? 0;
+      this.debateHistory = state.debateHistory ?? [];
+      this.agentWeights = new Map(Object.entries(state.agentWeights ?? {}));
+      if (state.priceRecords?.length) {
+        this.priceTracker.loadRecords(state.priceRecords);
+      }
+      console.log(`[Arena] State restored: ${this.debateHistory.length} debates, counter=${this.debateCounter}`);
+    } catch (err) {
+      console.error('[Arena] Failed to load state:', (err as Error).message);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -772,6 +831,7 @@ export class ArenaServer {
           if (this.debateHistory.length > 50) this.debateHistory.shift();
 
           this.updateAgentStats(debate);
+          this.saveState(); // persist state after every completed debate
 
           const modeStr = debate.wasEscalated ? '🔥 FULL DEBATE' : '⚡ QUICK';
           console.log(`[Arena] ${modeStr} ended: ${debate.result.consensus.toUpperCase()} (${debate.result.consensusConfidence}%)`);
