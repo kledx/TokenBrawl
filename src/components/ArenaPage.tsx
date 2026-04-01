@@ -715,6 +715,16 @@ export function ArenaPage() {
                     {displayToken.mint.slice(0, 6)}…{displayToken.mint.slice(-4)}↗
                   </a>
                 )}
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: '10px',
+                  color: 'rgba(0,255,200,0.5)', letterSpacing: '0.06em',
+                  padding: '1px 6px', borderRadius: '3px',
+                  border: '1px solid rgba(0,255,200,0.15)',
+                  background: 'rgba(0,255,200,0.05)',
+                  whiteSpace: 'nowrap',
+                }}>
+                  via Bitget Wallet
+                </span>
               </div>
               <div className="arena-token-bar__phase">
                 <span className={`arena-phase-badge arena-phase-badge--${displayPhase.toLowerCase()}`}>
@@ -839,6 +849,27 @@ export function ArenaPage() {
             <div className="arena-data-summary">
               <div className="section-card__header">
                 <span className="section-card__title">{t.onchainData}</span>
+                <a
+                  href="https://web3.bitget.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '5px',
+                    fontFamily: 'var(--font-mono)', fontSize: '10px',
+                    color: 'var(--text-muted)', textDecoration: 'none',
+                    letterSpacing: '0.06em', transition: 'color 0.15s',
+                    padding: '2px 8px', borderRadius: '3px',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'rgba(0,255,200,0.03)',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.color = '#00FFC8'; e.currentTarget.style.borderColor = 'rgba(0,255,200,0.3)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                  </svg>
+                  Powered by Bitget Wallet
+                </a>
               </div>
               <div className="arena-data-grid">
                 {displayToken.bitget.holders && (
