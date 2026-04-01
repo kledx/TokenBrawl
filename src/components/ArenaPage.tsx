@@ -519,6 +519,7 @@ export function ArenaPage() {
         <div className="arena-sidebar__text">
           <span>SYS.CTRL // CORE_ACTIVE</span>
           <span>NET: MAINNET-BETA</span>
+          <span style={{ color: 'rgba(0,255,200,0.4)', fontSize: '9px' }}>DATA: BITGET_WALLET</span>
         </div>
       </div>
 
@@ -959,11 +960,15 @@ export function ArenaPage() {
           <span>// TOTAL_NODES_ONLINE: {agents.length}</span>
           <span>// LATEST_BLOCK_HEARTBEAT: {Date.now().toString(16).toUpperCase()}</span>
           <span>// SYSTEM_INTEGRITY: OPTIMAL</span>
+          <span>// DATA_SOURCE: BITGET_WALLET_API</span>
+          <span>// TOKEN_DISCOVERY: BITGET_LAUNCHPAD</span>
           <span>// SECURE_CHANNEL_ENCRYPTION_ENABLED</span>
           <span>// GLOBAL_CONSENSUS_PROTOCOL_V2.1</span>
           <span>// TOTAL_NODES_ONLINE: {agents.length}</span>
           <span>// LATEST_BLOCK_HEARTBEAT: {Date.now().toString(16).toUpperCase()}</span>
           <span>// SYSTEM_INTEGRITY: OPTIMAL</span>
+          <span>// DATA_SOURCE: BITGET_WALLET_API</span>
+          <span>// TOKEN_DISCOVERY: BITGET_LAUNCHPAD</span>
           <span>// SECURE_CHANNEL_ENCRYPTION_ENABLED</span>
         </div>
       </div>
