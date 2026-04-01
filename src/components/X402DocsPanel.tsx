@@ -102,7 +102,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 // ---------------------------------------------------------------------------
 
 const CURL_EXAMPLE = `# Step 1 — Hit the endpoint without payment (get 402 instructions)
-curl http://your-server:3001/api/consensus/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+curl https://api.tokenbrawl.kledx.com/api/consensus/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
 
 # → HTTP 402
 # { "x402Version": 1, "accepts": [{ "network": "solana", "currency": "SOL",
@@ -111,14 +111,14 @@ curl http://your-server:3001/api/consensus/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZ
 # Step 2 — Send SOL on-chain (0.001 SOL → payTo address)
 # Step 3 — Retry with X-PAYMENT header
 curl -H "X-PAYMENT: 5wHu1qwD7q..." \\
-  http://your-server:3001/api/consensus/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+  https://api.tokenbrawl.kledx.com/api/consensus/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
 # → HTTP 200 + consensus data`;
 
 const JS_EXAMPLE = `import { Connection, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
 import { PublicKey } from "@solana/web3.js";
 
 async function queryConsensus(mint, payerKeypair) {
-  const BASE_URL = "http://your-server:3001";
+  const BASE_URL = "https://api.tokenbrawl.kledx.com";
 
   // 1. Get payment instructions
   const res402 = await fetch(\`\${BASE_URL}/api/consensus/\${mint}\`);

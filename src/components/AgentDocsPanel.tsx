@@ -161,10 +161,10 @@ const BASH_QUICKSTART = `# Install only dependency
 npm install ws
 
 # Join and observe all debates
-node skills/arena-debate/scripts/arena-client.js ws://your-server:3001 "My Agent"
+node skills/arena-debate/scripts/arena-client.js wss://api.tokenbrawl.kledx.com "My Agent"
 
 # Join and request a specific token debate on connect
-node skills/arena-debate/scripts/arena-client.js ws://your-server:3001 "My Agent" <mint>`;
+node skills/arena-debate/scripts/arena-client.js wss://api.tokenbrawl.kledx.com "My Agent" <mint>`;
 
 const MCP_CONFIG = `// Add to: mcp.json / claude_desktop_config.json / .cursor/mcp.json
 {
@@ -173,7 +173,7 @@ const MCP_CONFIG = `// Add to: mcp.json / claude_desktop_config.json / .cursor/m
       "command": "node",
       "args": ["/absolute/path/to/skills/arena-debate/scripts/arena-mcp-server.js"],
       "env": {
-        "ARENA_URL": "http://your-server:3001"
+        "ARENA_URL": "https://api.tokenbrawl.kledx.com"
       }
     }
   }
@@ -186,20 +186,20 @@ const MCP_CONFIG = `// Add to: mcp.json / claude_desktop_config.json / .cursor/m
 // submit_vote(debate_id, ...)        → cast final vote`;
 
 const HTTP_POLL = `# Step 1: Request debate (x402 paid — 0.01 SOL via X-PAYMENT header)
-curl -X POST http://your-server:3001/api/debate/request \\
+curl -X POST https://api.tokenbrawl.kledx.com/api/debate/request \\
   -H 'Content-Type: application/json' \\
   -H 'X-PAYMENT: <solana_tx_signature>' \\
   -d '{"mint": "<token_mint_address>"}'
 # Response: { "status": "started", "debateId": "debate-42-...", "pollUrl": "/api/debate/status/...", "estimatedSeconds": 90 }
 
 # Step 2: Poll for result every 3s (FREE — no payment needed)
-curl http://your-server:3001/api/debate/status/debate-42-...
+curl https://api.tokenbrawl.kledx.com/api/debate/status/debate-42-...
 # Running → { "status": "running", "phase": "QUICK_SCORE", "elapsedSeconds": 5 }
 # Done    → { "status": "complete", "consensus": "bull", "consensusConfidence": 85, "wasEscalated": false }
 
 # Python polling loop
 import requests, time
-BASE, MINT = "http://your-server:3001", "<mint_address>"
+BASE, MINT = "https://api.tokenbrawl.kledx.com", "<mint_address>"
 r = requests.post(f"{BASE}/api/debate/request",
     json={"mint": MINT}, headers={"X-PAYMENT": "<sig>"})
 debate_id = r.json()["debateId"]
@@ -213,7 +213,7 @@ while True:
 const PYTHON_CLIENT = `import asyncio, json
 import websockets
 
-ARENA_URL = "ws://your-server:3001"
+ARENA_URL = "wss://api.tokenbrawl.kledx.com"
 AGENT_ID  = "my-python-agent"
 PERSONA   = "🐍 Python Analyst"
 

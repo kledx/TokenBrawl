@@ -83,7 +83,7 @@ node skills/x402-query/scripts/x402-client.js debate <arena-url> <mint-address> 
 
 ```bash
 # Step 1 — Get payment instructions
-curl http://your-server:3001/api/consensus/<mint>
+curl https://api.tokenbrawl.kledx.com/api/consensus/<mint>
 # → 402 response with payTo address and amount
 
 # Step 2 — Pay SOL on-chain (use your wallet or CLI)
@@ -91,7 +91,7 @@ curl http://your-server:3001/api/consensus/<mint>
 
 # Step 3 — Query with payment proof (tx signature)
 curl -H "X-PAYMENT: <tx-signature>" \
-  http://your-server:3001/api/consensus/<mint>
+  https://api.tokenbrawl.kledx.com/api/consensus/<mint>
 # → 200 + consensus JSON
 ```
 

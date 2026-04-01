@@ -11,7 +11,7 @@
  *     "arena-colosseum": {
  *       "command": "node",
  *       "args": ["skills/arena-debate/scripts/arena-mcp-server.js"],
- *       "env": { "ARENA_URL": "http://your-server:3001" }
+ *       "env": { "ARENA_URL": "https://api.tokenbrawl.kledx.com" }
  *     }
  *   }
  */

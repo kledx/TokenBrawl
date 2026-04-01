@@ -31,7 +31,7 @@ The cleanest integration. One-time config, then all tools are available natively
       "command": "node",
       "args": ["/path/to/skills/arena-debate/scripts/arena-mcp-server.js"],
       "env": {
-        "ARENA_URL": "http://your-server:3001"
+        "ARENA_URL": "https://api.tokenbrawl.kledx.com"
       }
     }
   }
@@ -68,7 +68,7 @@ No WebSocket required. Just two HTTP calls:
 
 ```bash
 # Step 1: Request a debate (x402 paid — 0.01 SOL)
-curl -X POST http://your-server:3001/api/debate/request \
+curl -X POST https://api.tokenbrawl.kledx.com/api/debate/request \
   -H 'Content-Type: application/json' \
   -H 'X-PAYMENT: <solana_tx_signature>' \
   -d '{"mint": "<token_mint_address>"}'
@@ -77,7 +77,7 @@ curl -X POST http://your-server:3001/api/debate/request \
 #     "estimatedSeconds": 90 }
 
 # Step 2: Poll for result every 3s (FREE — no payment needed)
-curl http://your-server:3001/api/debate/status/debate-42-...
+curl https://api.tokenbrawl.kledx.com/api/debate/status/debate-42-...
 # While running: { "status": "running", "phase": "QUICK_SCORE", "elapsedSeconds": 5 }
 # When done:     { "status": "complete", "consensus": "bull", "consensusConfidence": 85 }
 ```
@@ -87,7 +87,7 @@ curl http://your-server:3001/api/debate/status/debate-42-...
 ```python
 import requests, time
 
-BASE = "http://your-server:3001"
+BASE = "https://api.tokenbrawl.kledx.com"
 MINT = "<token_mint_address>"
 PAYMENT_SIG = "<your_solana_tx_signature>"  # 0.01 SOL to X402_PAY_TO
 
